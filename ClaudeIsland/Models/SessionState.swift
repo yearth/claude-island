@@ -22,6 +22,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
     var pid: Int?
     var tty: String?
     var multiplexer: TerminalMultiplexer
+    var customName: String?
 
     // MARK: - State Machine
 
@@ -71,6 +72,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
         pid: Int? = nil,
         tty: String? = nil,
         multiplexer: TerminalMultiplexer = .none,
+        customName: String? = nil,
         phase: SessionPhase = .idle,
         chatItems: [ChatHistoryItem] = [],
         toolTracker: ToolTracker = ToolTracker(),
@@ -89,6 +91,7 @@ struct SessionState: Equatable, Identifiable, Sendable {
         self.pid = pid
         self.tty = tty
         self.multiplexer = multiplexer
+        self.customName = customName
         self.phase = phase
         self.chatItems = chatItems
         self.toolTracker = toolTracker
@@ -127,9 +130,9 @@ struct SessionState: Equatable, Identifiable, Sendable {
         return sessionId
     }
 
-    /// Display title: summary > first user message > project name
+    /// Display title: customName > summary > first user message > project name
     var displayTitle: String {
-        conversationInfo.summary ?? conversationInfo.firstUserMessage ?? projectName
+        customName ?? conversationInfo.summary ?? conversationInfo.firstUserMessage ?? projectName
     }
 
     /// Best hint for matching window title

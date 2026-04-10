@@ -177,6 +177,7 @@ actor SessionStore {
             pid: event.pid,
             tty: event.tty?.replacingOccurrences(of: "/dev/", with: ""),
             multiplexer: .none,  // Will be updated
+            customName: UserDefaults.standard.string(forKey: "customName.\(event.sessionId)"),
             phase: .idle
         )
     }
@@ -965,6 +966,21 @@ actor SessionStore {
     private func publishState() {
         let sortedSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
         sessionsSubject.send(sortedSessions)
+    }
+
+    // MARK: - Mutations
+
+    func setCustomName(_ name: String?, forSessionId sessionId: String) {
+        guard var session = sessions[sessionId] else { return }
+        let key = "customName.\(sessionId)"
+        if let name {
+            UserDefaults.standard.set(name, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        session.customName = name
+        sessions[sessionId] = session
+        publishState()
     }
 
     // MARK: - Queries

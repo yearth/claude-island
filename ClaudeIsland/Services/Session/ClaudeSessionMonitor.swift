@@ -120,6 +120,14 @@ class ClaudeSessionMonitor: ObservableObject {
         }
     }
 
+    /// Rename a session. Pass nil or empty string to clear the custom name.
+    func renameSession(sessionId: String, name: String?) {
+        let trimmed = name?.trimmingCharacters(in: .whitespaces)
+        Task {
+            await SessionStore.shared.setCustomName(trimmed?.isEmpty == false ? trimmed : nil, forSessionId: sessionId)
+        }
+    }
+
     // MARK: - State Update
 
     private func updateFromSessions(_ sessions: [SessionState]) {

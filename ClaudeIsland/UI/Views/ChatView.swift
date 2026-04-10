@@ -180,33 +180,54 @@ struct ChatView: View {
     // MARK: - Header
 
     @State private var isHeaderHovered = false
+    @State private var isEditingName = false
+    @State private var editingNameText = ""
+    @FocusState private var isNameFieldFocused: Bool
 
     private var chatHeader: some View {
-        Button {
-            viewModel.exitChat()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(isHeaderHovered ? 1.0 : 0.6))
-                    .frame(width: 24, height: 24)
+        HStack(spacing: 0) {
+            Button {
+                viewModel.exitChat()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(isHeaderHovered ? 1.0 : 0.6))
+                        .frame(width: 24, height: 24)
 
-                Text(session.displayTitle)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(isHeaderHovered ? 1.0 : 0.85))
-                    .lineLimit(1)
+                    if isEditingName {
+                        TextField("Session name", text: $editingNameText)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .textFieldStyle(.plain)
+                            .focused($isNameFieldFocused)
+                            .onSubmit { commitRename() }
+                            .onExitCommand { cancelRename() }
+                    } else {
+                        Text(session.displayTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white.opacity(isHeaderHovered ? 1.0 : 0.85))
+                            .lineLimit(1)
+                    }
 
-                Spacer()
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isHeaderHovered ? Color.white.opacity(0.08) : Color.clear)
+                )
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isHeaderHovered ? Color.white.opacity(0.08) : Color.clear)
-            )
+            .buttonStyle(.plain)
+            .onHover { isHeaderHovered = $0 }
+            .allowsHitTesting(!isEditingName)
+
+            IconButton(icon: isEditingName ? "checkmark" : "pencil.line") {
+                if isEditingName { commitRename() } else { startRename() }
+            }
+            .padding(.trailing, 8)
         }
-        .buttonStyle(.plain)
-        .onHover { isHeaderHovered = $0 }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Color.black.opacity(0.2))
@@ -442,7 +463,23 @@ struct ChatView: View {
         previousHistoryCount = history.count
     }
 
-    // MARK: - Actions
+    // MARK: - Rename
+
+    private func startRename() {
+        editingNameText = session.displayTitle
+        isEditingName = true
+        isNameFieldFocused = true
+    }
+
+    private func commitRename() {
+        let name = editingNameText.trimmingCharacters(in: .whitespaces)
+        sessionMonitor.renameSession(sessionId: sessionId, name: name.isEmpty ? nil : name)
+        isEditingName = false
+    }
+
+    private func cancelRename() {
+        isEditingName = false
+    }
 
     private func focusTerminal() {
         Task {

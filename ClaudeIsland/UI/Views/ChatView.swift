@@ -984,39 +984,45 @@ struct ThinkingView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Circle()
-                .fill(Color.gray.opacity(0.5))
-                .frame(width: 6, height: 6)
-                .padding(.top, 4)
+        // Skip rendering when text is empty — streaming thinking blocks can
+        // briefly arrive empty, which otherwise leaves an orphan grey dot.
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            EmptyView()
+        } else {
+            HStack(alignment: .top, spacing: 6) {
+                Circle()
+                    .fill(Color.gray.opacity(0.5))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 4)
 
-            Text(isExpanded ? text : String(text.prefix(80)) + (canExpand ? "..." : ""))
-                .font(.system(size: 11))
-                .foregroundColor(.gray)
-                .italic()
-                .lineLimit(isExpanded ? nil : 1)
-                .multilineTextAlignment(.leading)
+                Text(isExpanded ? text : String(text.prefix(80)) + (canExpand ? "..." : ""))
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+                    .italic()
+                    .lineLimit(isExpanded ? nil : 1)
+                    .multilineTextAlignment(.leading)
 
-            Spacer()
+                Spacer()
 
-            if canExpand {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.5))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .padding(.top, 3)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if canExpand {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
+                if canExpand {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.gray.opacity(0.5))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .padding(.top, 3)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if canExpand {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        isExpanded.toggle()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
     }
 }
 

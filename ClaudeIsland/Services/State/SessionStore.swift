@@ -781,6 +781,13 @@ actor SessionStore {
         case .thinking(let text):
             let itemId = "\(message.id)-thinking-\(blockIndex)"
             guard !existingIds.contains(itemId) else { return nil }
+
+            // Skip empty thinking blocks — streaming can briefly produce empty
+            // ones that would render as orphan grey dots.
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return nil
+            }
+
             return ChatHistoryItem(id: itemId, type: .thinking(text), timestamp: message.timestamp)
 
         case .image(let imageBlock):

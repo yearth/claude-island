@@ -789,8 +789,8 @@ struct ToolCallView: View {
                 }
             }
 
-            // Subagent tools list (for Task tools)
-            if tool.name == "Task" && !tool.subagentTools.isEmpty {
+            // Subagent tools list (for Task/Agent tools)
+            if (tool.name == "Task" || tool.name == "Agent") && !tool.subagentTools.isEmpty {
                 SubagentToolsList(tools: tool.subagentTools)
                     .padding(.leading, 12)
                     .padding(.top, 2)
@@ -798,7 +798,7 @@ struct ToolCallView: View {
 
             // Result content (Edit always shows, others when expanded)
             // Edit tools bypass hasResult check - fallback in ToolResultContent renders from input params
-            if showContent && tool.status != .running && tool.name != "Task" && (hasResult || tool.name == "Edit") {
+            if showContent && tool.status != .running && tool.name != "Task" && tool.name != "Agent" && (hasResult || tool.name == "Edit") {
                 ToolResultContent(tool: tool)
                     .padding(.leading, 12)
                     .padding(.top, 4)

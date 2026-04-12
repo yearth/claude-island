@@ -294,8 +294,12 @@ actor SessionStore {
             }
 
         case "PostToolUse":
-            if ToolCallItem.isSubagentContainerName(event.tool) {
-                Self.logger.debug("PostToolUse for Task/Agent received (subagent still running)")
+            if ToolCallItem.isSubagentContainerName(event.tool), let toolUseId = event.toolUseId {
+                // Agent tool returned — the subagent has finished. Stop
+                // tracking so subsequent tools in the parent turn don't get
+                // attached to this dead task.
+                session.subagentState.stopTask(taskToolId: toolUseId)
+                Self.logger.debug("Stopped subagent tracking for \(toolUseId.prefix(12), privacy: .public)")
             } else if let toolUseId = event.toolUseId,
                       session.subagentState.hasActiveSubagent {
                 // A subagent's inner tool completed. Update its status in the

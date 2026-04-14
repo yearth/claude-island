@@ -353,14 +353,17 @@ struct ChatView: View {
 
     // MARK: - Input Bar
 
-    /// Messaging is only supported in tmux (zellij lacks per-pane write support)
     private var canSendMessages: Bool {
-        session.multiplexer == .tmux && session.tty != nil
+        switch session.multiplexer {
+        case .tmux: return session.tty != nil
+        case .zellij: return session.pid != nil
+        case .none: return false
+        }
     }
 
     private var inputBar: some View {
         HStack(spacing: 10) {
-            TextField(canSendMessages ? "Message Claude..." : "Open Claude Code in tmux to enable messaging", text: $inputText)
+            TextField(canSendMessages ? "Message Claude..." : "Open Claude Code in tmux or zellij to enable messaging", text: $inputText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundColor(canSendMessages ? .white : .white.opacity(0.4))
@@ -479,9 +482,17 @@ struct ChatView: View {
     }
 
     private func sendToSession(_ text: String) async {
-        guard session.multiplexer == .tmux, let tty = session.tty else { return }
-        if let target = await findTmuxTarget(tty: tty) {
-            _ = await ToolApprovalHandler.shared.sendMessage(text, to: target)
+        switch session.multiplexer {
+        case .tmux:
+            guard let tty = session.tty else { return }
+            if let target = await findTmuxTarget(tty: tty) {
+                _ = await ToolApprovalHandler.shared.sendMessage(text, to: target)
+            }
+        case .zellij:
+            guard let pid = session.pid else { return }
+            _ = await ZellijController.shared.sendMessage(text, toClaudePid: pid)
+        case .none:
+            break
         }
     }
 

@@ -17,9 +17,32 @@ actor ZellijController {
 
     // MARK: - Public API
 
+    /// Send a message to the zellij pane running the given Claude PID.
+    /// Uses write-chars for text, then send-keys Enter to submit.
+    func sendMessage(_ text: String, toClaudePid claudePid: Int) async -> Bool {
+        guard let zellijPath = getZellijPath() else { return false }
+        guard let info = readZellijPaneInfo(forPid: claudePid) else { return false }
+        let paneIdStr = String(info.paneId)
+        let sessionName = info.sessionName
+
+        do {
+            _ = try await ProcessExecutor.shared.run(
+                zellijPath,
+                arguments: ["--session", sessionName, "action", "write-chars", "--pane-id", paneIdStr, text]
+            )
+            _ = try await ProcessExecutor.shared.run(
+                zellijPath,
+                arguments: ["--session", sessionName, "action", "send-keys", "--pane-id", paneIdStr, "Enter"]
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func focusPane(forClaudePid claudePid: Int) async -> Bool {
         guard let zellijPath = getZellijPath() else { return false }
-        guard let sessionName = readZellijSessionName(forPid: claudePid) else { return false }
+        guard let sessionName = readZellijPaneInfo(forPid: claudePid)?.sessionName else { return false }
         let cwd = ProcessTreeBuilder.shared.getWorkingDirectory(forPid: claudePid)
         let tabName = cwd.flatMap { findTabName(forCwd: $0, sessionName: sessionName, zellijPath: zellijPath) }
         return await switchToTab(sessionName, tabName: tabName, zellijPath: zellijPath)
@@ -31,7 +54,7 @@ actor ZellijController {
 
         for zellijPid in tree.values.filter({ $0.command.lowercased().contains("zellij") }).map({ $0.pid }) {
             for pid in ProcessTreeBuilder.shared.findDescendants(of: zellijPid, tree: tree) {
-                guard let sessionName = readZellijSessionName(forPid: pid),
+                guard let sessionName = readZellijPaneInfo(forPid: pid)?.sessionName,
                       let processCwd = ProcessTreeBuilder.shared.getWorkingDirectory(forPid: pid),
                       processCwd == cwd else { continue }
                 let tabName = findTabName(forCwd: cwd, sessionName: sessionName, zellijPath: zellijPath)
@@ -45,7 +68,13 @@ actor ZellijController {
 
     func getZellijPath() -> String? {
         if let cached = cachedPath { return cached }
-        let candidates = ["/opt/homebrew/bin/zellij", "/usr/local/bin/zellij", "/usr/bin/zellij"]
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            "\(home)/.cargo/bin/zellij",
+            "/opt/homebrew/bin/zellij",
+            "/usr/local/bin/zellij",
+            "/usr/bin/zellij",
+        ]
         if let found = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
             cachedPath = found
             return found
@@ -53,18 +82,46 @@ actor ZellijController {
         return nil
     }
 
-    // MARK: - Session Name
+    // MARK: - Pane Info
 
-    private nonisolated func readZellijSessionName(forPid pid: Int) -> String? {
+    private struct ZellijPaneInfo {
+        let paneId: Int
+        let sessionName: String
+    }
+
+    /// Read ZELLIJ_PANE_ID and ZELLIJ_SESSION_NAME for the pane containing the given PID.
+    /// Uses a single `ps eww -ax` call and walks the process tree to find an ancestor with both values.
+    private nonisolated func readZellijPaneInfo(forPid targetPid: Int) -> ZellijPaneInfo? {
         guard let output = ProcessExecutor.shared.runSyncOrNil(
-            "/bin/ps", arguments: ["eww", "-p", String(pid)]
+            "/bin/ps", arguments: ["eww", "-ax"]
         ) else { return nil }
 
-        for token in output.split(separator: " ") {
-            let s = String(token)
-            if s.hasPrefix("ZELLIJ_SESSION_NAME=") {
-                return String(s.dropFirst("ZELLIJ_SESSION_NAME=".count))
+        var paneIdByPid: [Int: Int] = [:]
+        var sessionNameByPid: [Int: String] = [:]
+        for line in output.components(separatedBy: "\n") {
+            guard line.contains("ZELLIJ_PANE_ID=") || line.contains("ZELLIJ_SESSION_NAME=") else { continue }
+            let tokens = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard let pid = tokens.first.flatMap({ Int($0) }) else { continue }
+            for token in tokens {
+                let s = String(token)
+                if s.hasPrefix("ZELLIJ_PANE_ID="), let id = Int(s.dropFirst("ZELLIJ_PANE_ID=".count)) {
+                    paneIdByPid[pid] = id
+                } else if s.hasPrefix("ZELLIJ_SESSION_NAME=") {
+                    sessionNameByPid[pid] = String(s.dropFirst("ZELLIJ_SESSION_NAME=".count))
+                }
             }
+        }
+
+        let tree = ProcessTreeBuilder.shared.buildTree()
+        var current = targetPid
+        var depth = 0
+        while current > 1 && depth < 20 {
+            if let paneId = paneIdByPid[current], let sessionName = sessionNameByPid[current] {
+                return ZellijPaneInfo(paneId: paneId, sessionName: sessionName)
+            }
+            guard let info = tree[current] else { break }
+            current = info.ppid
+            depth += 1
         }
         return nil
     }
